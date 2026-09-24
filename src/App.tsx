@@ -68,8 +68,18 @@ export default function App() {
   }, [fsm.states]);
 
   function addState() {
-    const n: StateNode = { id: nid("S"), name: `S${counter}`, x: 140 + (counter % 6) * 110, y: 100 + (counter % 3) * 100 };
-    setFsm((f) => ({ ...f, states: [...f.states, n] }));
+    setFsm((f) => {
+      // First free spot on a grid, so a new state never lands on top of an existing one.
+      let x = 140, y = 100;
+      search: for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 7; col++) {
+          const cx = 140 + col * 110, cy = 100 + row * 90;
+          if (f.states.every((st) => Math.hypot(st.x - cx, st.y - cy) > 80)) { x = cx; y = cy; break search; }
+        }
+      }
+      const n: StateNode = { id: nid("S"), name: `S${counter}`, x, y };
+      return { ...f, states: [...f.states, n] };
+    });
   }
   function startDrag(id: string, e: React.PointerEvent) {
     const s = fsm.states.find((s) => s.id === id)!;
@@ -84,7 +94,9 @@ export default function App() {
   }
   function confirmTransition() {
     if (!pendingTarget) return;
-    const syms = symbolInput.split(",").map((s) => s.trim()).filter(Boolean);
+    // The simulator reads the input one character at a time, so every symbol is a single character.
+    // "01" or "0,1" both mean the two symbols 0 and 1.
+    const syms = Array.from(new Set(symbolInput.split(",").flatMap((s) => Array.from(s.trim())).filter((c) => c.trim())));
     if (syms.length === 0) { setPendingTarget(null); return; }
     setFsm((f) => {
       const existing = f.transitions.find((t) => t.from === pendingTarget.from && t.to === pendingTarget.to);
