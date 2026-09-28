@@ -35,6 +35,7 @@ header p { margin: 3px 0 0; color: var(--dim); font-size: 12.5px; }
 .palette button:hover { border-color: var(--amber); color: #fff; }
 .palette .preset { background: #241a10; color: var(--amber); }
 .palette .clear { color: #f87171; border-color: #3a1a1a; }
+.palette .export { color: #34d399; }
 
 .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 
@@ -42,7 +43,7 @@ header p { margin: 3px 0 0; color: var(--dim); font-size: 12.5px; }
 .board { width: 100%; height: auto; background: #0a0714; border: 1px solid var(--line); border-radius: 12px;
   touch-action: none; user-select: none; }
 
-.snode { fill: #1a1428; stroke: #3a2f52; stroke-width: 1.5; cursor: grab; }
+.snode { fill: #1a1428; stroke: #3a2f52; stroke-width: 1.5; cursor: grab; transition: fill .2s, stroke .2s; }
 .snode.sel { stroke: var(--amber); stroke-width: 2.5; }
 .snode.current { fill: #2e2408; stroke: var(--amber); stroke-width: 3; }
 .saccept { fill: none; stroke: #3a2f52; stroke-width: 1.5; pointer-events: none; }
@@ -51,6 +52,21 @@ header p { margin: 3px 0 0; color: var(--dim); font-size: 12.5px; }
 .tlabel { font-size: 12px; font-family: ui-monospace, monospace; text-anchor: middle; }
 .port { fill: #0a0714; stroke: var(--violet); stroke-width: 2; cursor: crosshair; }
 .port:hover { fill: var(--amber); stroke: var(--amber); }
+
+.snode-group { animation: node-in .35s backwards; animation-delay: calc(var(--i, 0) * 40ms); }
+.current-ring { fill: none; stroke: var(--amber); stroke-width: 2; opacity: 0; pointer-events: none;
+  animation: pulse-ring 1.3s ease-out infinite; }
+.tedge.active { animation: edge-flash .5s ease-in-out infinite alternate; }
+
+@keyframes node-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pulse-ring {
+  0% { r: 32; opacity: .7; }
+  100% { r: 46; opacity: 0; }
+}
+@keyframes edge-flash {
+  from { stroke-width: 3; opacity: 1; }
+  to { stroke-width: 4.5; opacity: .65; }
+}
 
 .side-panel { display: flex; flex-direction: column; gap: 12px; }
 .edit-block, .sim-block { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }

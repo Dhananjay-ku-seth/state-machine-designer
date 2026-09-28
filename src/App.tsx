@@ -114,6 +114,10 @@ export default function App() {
       transitions: f.transitions.filter((t) => t.from !== id && t.to !== id),
     }));
     setSelected(null);
+    // A live sim result's path can reference the state being removed — stale otherwise,
+    // same as the reset already done on clearAll/loadPreset/SaveFsm's onLoad.
+    setResult(null);
+    setStepIdx(0);
   }
   function toggleAccept(id: string) {
     setFsm((f) => ({ ...f, states: f.states.map((s) => s.id === id ? { ...s, accept: !s.accept } : s) }));
@@ -135,6 +139,55 @@ export default function App() {
   function clearAll() {
     setFsm({ states: [], transitions: [] });
     setSelected(null); setResult(null); setStepIdx(0);
+  }
+
+  function exportPng() {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    // Same reason as Logic Circuit Simulator's export: the live styling comes from index.css
+    // classnames, invisible to a serialized standalone SVG, so inline the rules it actually uses.
+    const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    style.textContent = `
+      .snode { fill:#1a1428; stroke:#3a2f52; stroke-width:1.5; }
+      .snode.sel { stroke:#fbbf24; stroke-width:2.5; }
+      .snode.current { fill:#2e2408; stroke:#fbbf24; stroke-width:3; }
+      .saccept { fill:none; stroke:#3a2f52; stroke-width:1.5; }
+      .snode.current + .saccept { stroke:#fbbf24; }
+      .slabel { fill:#e8e2f4; font-size:14px; font-weight:600; text-anchor:middle; dominant-baseline:central; font-family:'Space Grotesk',sans-serif; }
+      .tlabel { font-size:12px; font-family:ui-monospace,monospace; text-anchor:middle; }
+      .port { fill:#0a0714; stroke:#8b7bb8; stroke-width:2; }
+    `;
+    clone.insertBefore(style, clone.firstChild);
+    const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    bg.setAttribute("width", String(SVW));
+    bg.setAttribute("height", String(SVH));
+    bg.setAttribute("fill", "#0a0714");
+    clone.insertBefore(bg, clone.firstChild);
+
+    const xml = new XMLSerializer().serializeToString(clone);
+    const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = SVW * scale;
+      canvas.height = SVH * scale;
+      const ctx = canvas.getContext("2d")!;
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "state-machine.png";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    };
+    img.src = url;
   }
 
   const hasStart = fsm.states.some((s) => s.start);
@@ -180,6 +233,8 @@ export default function App() {
           <button key={p.id} className="preset" onClick={() => loadPreset(p.id)} title={p.description}>{p.name}</button>
         ))}
         <button className="clear" onClick={clearAll}>Clear</button>
+        <span className="sep" />
+        <button className="export" onClick={exportPng}>⬇ PNG</button>
       </div>
 
       <div className="palette">
@@ -213,7 +268,8 @@ export default function App() {
               const d = `M ${lx - 22} ${ly + 6} C ${lx - 26} ${ly - 34}, ${lx + 26} ${ly - 34}, ${lx + 22} ${ly + 6}`;
               return (
                 <g key={t.id}>
-                  <path d={d} fill="none" stroke={active ? "#fbbf24" : "#8b7bb8"} strokeWidth={active ? 3 : 2} markerEnd="url(#arrow)" />
+                  <path d={d} fill="none" className={"tedge" + (active ? " active" : "")}
+                    stroke={active ? "#fbbf24" : "#8b7bb8"} strokeWidth={active ? 3 : 2} markerEnd="url(#arrow)" />
                   <text x={lx} y={ly - 30} className="tlabel" fill={active ? "#fbbf24" : "#c9bfe0"}>{t.symbols.join(",")}</text>
                 </g>
               );
@@ -224,7 +280,8 @@ export default function App() {
             const mx = (x1 + x2) / 2 - uy * 14, my = (y1 + y2) / 2 + ux * 14;
             return (
               <g key={t.id}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={active ? "#fbbf24" : "#8b7bb8"} strokeWidth={active ? 3 : 2} markerEnd="url(#arrow)" />
+                <line x1={x1} y1={y1} x2={x2} y2={y2} className={"tedge" + (active ? " active" : "")}
+                  stroke={active ? "#fbbf24" : "#8b7bb8"} strokeWidth={active ? 3 : 2} markerEnd="url(#arrow)" />
                 <text x={mx} y={my} className="tlabel" fill={active ? "#fbbf24" : "#c9bfe0"}>{t.symbols.join(",")}</text>
               </g>
             );
@@ -237,13 +294,15 @@ export default function App() {
           })()}
 
           {/* states */}
-          {fsm.states.map((s) => {
+          {fsm.states.map((s, idx) => {
             const isCurrent = s.id === currentStateId;
             const isSelected = s.id === selected;
             return (
-              <g key={s.id} transform={`translate(${s.x},${s.y})`}
+              <g key={s.id} transform={`translate(${s.x},${s.y})`} className="snode-group"
+                style={{ ["--i" as any]: idx }}
                 onPointerDown={(e) => { e.stopPropagation(); startDrag(s.id, e); }}>
                 {s.start && <path d={`M ${-R - 34} 0 L ${-R - 4} 0`} stroke="#8b7bb8" strokeWidth={2} markerEnd="url(#arrow)" />}
+                {isCurrent && result && <circle r={R} className="current-ring" />}
                 <circle r={R} className={"snode" + (isCurrent ? " current" : "") + (isSelected ? " sel" : "")} />
                 {s.accept && <circle r={R - 5} className="saccept" />}
                 <text className="slabel">{s.name}</text>
